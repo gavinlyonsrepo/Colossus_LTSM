@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import re
 import math
+from PIL import Image
 from colossus_ltsm.settings import settings
 
 
@@ -27,11 +28,25 @@ class FontViewer(tk.Frame):
         tk.Radiobutton(addr_frame, text="Vertical", variable=self.addr_mode_var,
                        value="vertical").pack(side="left", padx=5)
         # Load from settings
-        self.scale = settings.getint("Display", "scale", 8)
+        self.scale = settings.getint("Display", "scale", 4)
         self.cols = settings.getint("Display", "cols", 16)
         # Open button
-        tk.Button(self, text="Open header Font File", command=self.open_file)\
-            .grid(row=1, column=0, columnspan=3, pady=8)
+        btn_frame = tk.Frame(self)
+        btn_frame.grid(row=1, column=0, columnspan=3, pady=8)
+
+        tk.Button(
+            btn_frame,
+            text="Open header Font File",
+            command=self.open_file
+        ).pack(side="left", padx=5)
+
+        self.export_btn = tk.Button(
+            btn_frame,
+            text="Export PNG",
+            command=self.export_png,
+            state="disabled"
+        )
+        self.export_btn.pack(side="left", padx=5)
         # Show current settings for scale and columns
         self.info_label = tk.Label(
             self, text=f"Scale: {self.scale}, Cols: {self.cols}")
@@ -58,9 +73,13 @@ class FontViewer(tk.Frame):
         # Expand the whole widget in parent
         self.grid_rowconfigure(3, weight=1)
         self.grid_columnconfigure(0, weight=1)
+        # Current font data.
+        self.current_font_bytes = None
 
     def open_file(self):
         """ Open a file dialog to select a C or C++ header file"""
+        self.export_btn.config(state="disabled")
+        self.current_font_bytes = None
         path = filedialog.askopenfilename(
             filetypes=[("C++ Header", "*.hpp"), ("C++ Header", "*.h")])
         if not path:
@@ -101,7 +120,9 @@ class FontViewer(tk.Frame):
                         f"Byte count mismatch.\n"
                         f"Expected {expected}, got {len(font_bytes)}"
                     )
+                self.current_font_bytes = font_bytes
                 self.render_font(font_bytes)
+                self.export_btn.config(state="normal")
             else:
                 messagebox.showerror("Error", "Invalid font data format.")
                 self.canvas.delete("all")
@@ -196,6 +217,78 @@ class FontViewer(tk.Frame):
                             px, py, px + self.scale,
                             py + self.scale, fill="black")
 
+    def export_png(self):
+        """Export currently loaded font to PNG image."""
+        if not self.current_font_bytes:
+            messagebox.showerror("Error", "No font loaded.")
+            return
+        BG_COLOR = (0, 0, 0) # Black
+        GLYPH_COLOR = (0, 120, 255) # Soft Blue 
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG Image", "*.png")]
+        )
+
+        if not path:
+            print("Export path not valid, export cancelled.")
+            return
+
+        font_bytes = self.current_font_bytes
+        x_size = font_bytes[0]
+        y_size = font_bytes[1]
+        ascii_offset = font_bytes[2]
+        last_offset = font_bytes[3]
+        num_chars = last_offset + 1
+
+        if self.addr_mode_var.get() == "horizontal":
+            bytes_per_char = math.ceil(x_size / 8) * y_size
+        else:
+            bytes_per_char = math.ceil(y_size / 8) * x_size
+
+        cols = self.cols
+        rows = math.ceil(num_chars / cols)
+        img_width = cols * x_size
+        img_height = rows * y_size
+        image = Image.new("RGB", (img_width, img_height), BG_COLOR)
+        pixels = image.load()
+
+        for idx in range(num_chars):
+            start = 4 + idx * bytes_per_char
+            end = 4 + (idx + 1) * bytes_per_char
+            glyph_data = font_bytes[start:end]
+            col = idx % cols
+            row = idx // cols
+            x_offset = col * x_size
+            y_offset = row * y_size
+
+            if self.addr_mode_var.get() == "horizontal":
+                for y in range(y_size):
+                    for byte_index in range(x_size // 8):
+                        i = y * (x_size // 8) + byte_index
+                        if i >= len(glyph_data):
+                            continue
+                        byte_val = glyph_data[i]
+                        for bit in range(8):
+                            if (byte_val >> (7 - bit)) & 1:
+                                px = x_offset + byte_index * 8 + bit
+                                py = y_offset + y
+                                pixels[px, py] = (0, 120, 255)
+            else:
+                bytes_per_col = y_size // 8
+                for x in range(x_size):
+                    for row_block in range(bytes_per_col):
+                        i = row_block * x_size + x
+                        if i >= len(glyph_data):
+                            continue
+                        byte_val = glyph_data[i]
+                        for bit in range(8):
+                            if byte_val & (1 << bit):
+                                px = x_offset + x
+                                py = y_offset + row_block * 8 + bit
+                                pixels[px, py] = GLYPH_COLOR
+
+        image.save(path, "PNG")
+        messagebox.showinfo("Success", f"PNG exported:\n{path}")
 
 if __name__ == "__main__":
     print("This is a module, not a standalone script.")

@@ -5,6 +5,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageFont, ImageDraw
+from colossus_ltsm.settings import settings
 
 
 class FontConverter(tk.Frame):
@@ -16,6 +17,9 @@ class FontConverter(tk.Frame):
         self.controller = controller
         label = tk.Label(self, text="Font Converter", font=("Arial", 24))
         label.pack(pady=20)
+        # Load from settings
+        if settings.getbool("Debug", "debugOnOff", False):
+            print("Debug enabled")
         # File selection
         self.ttf_path = tk.StringVar()
         tk.Button(self, text="Select TTF File",
@@ -24,13 +28,13 @@ class FontConverter(tk.Frame):
         # Options
         options_frame = tk.Frame(self)
         options_frame.pack(pady=10)
-        self.pixel_width = tk.IntVar(value=8)
+        self.pixel_width = tk.IntVar(value=16)
         self.pixel_height = tk.IntVar(value=16)
         self.ascii_start = tk.IntVar(value=32)
         self.ascii_end = tk.IntVar(value=126)
-        self.output_name = tk.StringVar(value="myfont")
-        self.font_name = tk.StringVar(value="MyFont")
-        self.file_ext = tk.StringVar(value="h")
+        self.output_name = tk.StringVar(value="my_font_file")
+        self.font_name = tk.StringVar(value="MyFontName")
+        self.file_ext = tk.StringVar(value="hpp")
         self.array_style = tk.StringVar(value="cpp")
         self.addr_mode = tk.StringVar(
             value="horizontal")  # horizontal / vertical
@@ -112,12 +116,19 @@ class FontConverter(tk.Frame):
             if not self._validate_dimensions(params):
                 return
             font = ImageFont.truetype(self.ttf_path.get(), params['height'])
+            if settings.getbool("Debug", "debugOnOff", False):
+                fontName, fontStyle = font.getname()
+                ascent, descent = font.getmetrics()
+                print(f"Font selected: {fontName} , {fontStyle}")
+                print (f"Font metrics: ascent={ascent}px, descent={descent}px")
+
             control = [params['width'], params['height'], params['start'],
                        params['end'] - params['start']]
             glyph_blocks = self._generate_glyph_blocks(font, params)
             output = self._compose_output(control, glyph_blocks, params)
             Path(save_path).write_text(output, encoding="utf-8")
             messagebox.showinfo("Success", f"Font converted:\n{save_path}")
+            print(f"Font conversion successful. Output saved to: {save_path}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Conversion failed:\n{e}")
@@ -170,15 +181,32 @@ class FontConverter(tk.Frame):
         return True
 
     def _generate_glyph_blocks(self, font, params):
-        """Generate glyph blocks for each character."""
+        """Generate glyph blocks with middle-middle (mm) anchoring for vertical centering."""
         glyph_blocks = []
+        canvas_w = params['width']
+        canvas_h = params['height']
+        center_x = canvas_w // 2
+        center_y = canvas_h // 2
         for code in range(params['start'], params['end'] + 1):
             char = chr(code)
-            img = Image.new("1", (params['width'], params['height']), 0)
+            img = Image.new("1", (canvas_w, canvas_h), 0)
             draw = ImageDraw.Draw(img)
-            draw.text((0, 0), char, fill=1, font=font)
+            try:
+                bbox = font.getbbox(char)
+                if bbox is None:
+                    # No ink (e.g. space, control char) → leave blank
+                    glyph_bytes = self._extract_glyph_bytes(img, params)
+                    glyph_blocks.append((char, glyph_bytes))
+                    continue
+                # With anchor="mm", Pillow centers the glyph's visual middle at (center_x, center_y)
+                # This automatically handles most ascender/descender balancing nicely
+                draw.text((center_x, center_y), char, fill=1, font=font, anchor="mm")
+            except Exception:
+                draw.text((0, 0), char, fill=1, font=font)
+
             glyph_bytes = self._extract_glyph_bytes(img, params)
             glyph_blocks.append((char, glyph_bytes))
+
         return glyph_blocks
 
     def _extract_glyph_bytes(self, img, params):
@@ -204,6 +232,7 @@ class FontConverter(tk.Frame):
                         pixel = img.getpixel((xx, y)) if xx < width else 0
                         byte_val = (byte_val << 1) | (1 if pixel else 0)
                     glyph_bytes.append(byte_val)
+        
         return glyph_bytes
 
     def _compose_output(self, control, glyph_blocks, params):

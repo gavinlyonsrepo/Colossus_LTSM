@@ -3,6 +3,10 @@
     Contains the main application class and page management.
 """
 
+import os
+import sys
+from pathlib import Path
+import subprocess
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import webbrowser
@@ -18,7 +22,16 @@ class ColossusApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-
+        # Set application window icon (Linux)
+        if sys.platform.startswith("linux"):
+            icon_path = Path.home() / ".local/share/icons/colossus.png"
+            if icon_path.exists():
+                try:
+                    icon_img = tk.PhotoImage(file=str(icon_path))
+                    self.iconphoto(True, icon_img)
+                    self._icon_ref = icon_img  # prevent garbage collection
+                except Exception as e:
+                    print("Warning: could not set window icon:", e)
         self.title("Colossus")
         self.geometry("800x600")
 
@@ -62,19 +75,64 @@ class MainMenu(tk.Frame):
         self.controller = controller
         label = tk.Label(self, text="Main Menu", font=("Arial", 24))
         label.pack(pady=20)
+        # buttons section
+        button_width = 28  # uniform width for all buttons
         btn_font_convert = tk.Button(
-            self, text="Font tff to Data convert", command=self.open_convert)
+            self,
+            text="Font tff to Data convert",
+            width=button_width,
+            command=self.open_convert
+        )
         btn_font_convert.pack(pady=16)
         btn_font_horizontal = tk.Button(
-            self, text="Font Data Viewer", command=self.open_font_viewer)
+            self,
+            text="Font Data Viewer",
+            width=button_width,
+            command=self.open_font_viewer
+        )
         btn_font_horizontal.pack(pady=16)
-        btn_settings = tk.Button(self, text="Settings",
-                                 command=self.open_settings)
+        btn_settings = tk.Button(
+            self,
+            text="Settings",
+            width=button_width,
+            command=self.open_settings
+        )
         btn_settings.pack(pady=16)
-        btn_about = tk.Button(self, text="About", command=self.open_about)
+        btn_about = tk.Button(
+            self,
+            text="About",
+            width=button_width,
+            command=self.open_about
+        )
         btn_about.pack(pady=16)
-        btn_exit = tk.Button(self, text="Exit", command=controller.quit)
+        self.btn_desktop = tk.Button(
+            self,
+            text="Add Desktop Entry",
+            width=button_width,
+            command=self.add_desktop_entry
+        )
+        self.btn_desktop.pack(pady=16)
+        # Auto-detect at startup
+        if desktop_entry_installed():
+            self.btn_desktop.config(
+                state="disabled",
+                text="Desktop Entry Installed"
+            )
+        btn_exit = tk.Button(
+            self,
+            text="Exit",
+            width=button_width,
+            command=controller.quit
+        )
         btn_exit.pack(pady=16)
+
+    def add_desktop_entry(self):
+        """ Install desktop entry and icon for Linux. """
+        if install_desktop_entry():
+            self.btn_desktop.config(
+                state="disabled",
+                text="Desktop Entry Installed"
+            )
 
     def open_font_viewer(self):
         """ Open the Font Viewer Page dynamically. """
@@ -244,10 +302,80 @@ class AboutPage(tk.Frame):
                              command=lambda: controller.show_frame(MainMenu))
         btn_back.pack(pady=10)
 
+
+def install_desktop_entry():
+    """
+    Install desktop entry and icon locally for Linux.
+    Returns True if installation succeeded or already exists.
+    Returns False on failure.
+    """
+    if not sys.platform.startswith("linux"):
+        messagebox.showinfo("Desktop Entry",
+                           "Desktop entry installation is Linux only.")
+        return False
+
+    try:
+        home = Path.home()
+        icon_path = home / ".local/share/icons"
+        app_path = home / ".local/share/applications"
+        icon_path.mkdir(parents=True, exist_ok=True)
+        app_path.mkdir(parents=True, exist_ok=True)
+
+        files = [
+            (
+                "colossus.png",
+                icon_path,
+                "https://raw.githubusercontent.com/gavinlyonsrepo/Colossus_LTSM/main/extras/desktop/colossus.png"
+            ),
+            (
+                "colossus.desktop",
+                app_path,
+                "https://raw.githubusercontent.com/gavinlyonsrepo/Colossus_LTSM/main/extras/desktop/colossus.desktop"
+            )
+        ]
+
+        for filename, target_dir, url in files:
+            target_file = target_dir / filename
+            if target_file.exists():
+                print(f"INFO:: {filename} already exists in {target_dir}")
+                continue
+            result = subprocess.run(
+                ["curl", "-L", "-s", "-o", str(target_file), url]
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"curl failed downloading {filename}")
+            print(f"INFO:: {filename} installed in {target_dir}")
+
+        messagebox.showinfo(
+            "Desktop Entry Installation",
+            "Desktop entry and icon installed (or already present)."
+        )
+        return True
+
+    except Exception as error:
+        print("Error installing desktop entry:", error)
+        messagebox.showerror(
+            "Desktop Entry Installation Failed",
+            "Installation failed.\nCheck network or curl availability."
+        )
+        return False
+    
+def desktop_entry_installed():
+	"""Return True if desktop entry + icon already exist (Linux only)."""
+	if not sys.platform.startswith("linux"):
+		return False
+	home = Path.home()
+	icon_file = home / ".local/share/icons/colossus.png"
+	desktop_file = home / ".local/share/applications/colossus.desktop"
+	return icon_file.exists() and desktop_file.exists()
+
+
 def main():
     """ Entry point for the Colossus application."""
+    print(f"Colossus LTSM version {__version__} starting.")
     app = ColossusApp()
     app.mainloop()
+    print("Colossus LTSM exited.")
 
 
 if __name__ == "__main__":

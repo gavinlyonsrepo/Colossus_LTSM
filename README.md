@@ -11,6 +11,7 @@
 * [Input](#input)
 * [Output](#output)
 * [Configuration file](#configuration-file)
+* [Desktop Entry](#desktop-entry)
 * [Screenshots](#screenshots)
 * [Projects](#projects)
 
@@ -19,11 +20,11 @@
 **Colossus_LTSM** is a Python tool for converting TrueType fonts (`.ttf`) into C/C++ bitmap arrays and for visualizing font data stored in C/C++ header files.  
 It is aimed at users working with embedded systems, LCDs, and GUIs where compact fonts are needed.
 
-- Convert `.ttf` fonts to C/C++ arrays
-- Adjustable font size, ASCII range, and addressing mode
-- Visualize fonts from existing C/C++ headers
-- GUI built with Tkinter
-- Lightweight: only depends on `Pillow`
+* Convert `.ttf` fonts to C/C++ arrays
+* Adjustable font size, ASCII range, and addressing mode
+* Visualize fonts from existing C/C++ headers
+* GUI built with Tkinter
+* Lightweight: only depends on `Pillow`
 
 ## Installation
 
@@ -51,6 +52,8 @@ pipx install colossus-ltsm
 
 Run the GUI:
 
+Select from application menu(if desktop entry installed) or run from terminal with:
+
 ```python
 colossus
 # or directly with Python
@@ -66,11 +69,14 @@ colossus
 * Choose C or C++ arrays
 * Choose file extension (.h or .hpp)
 * Choose font name and file name
+* Some ttf files are available in the `extras/ttf` directory for testing.
 
 ## Output
 
-* Generates a C or C++ header file with bitmap arrays
-* Example output
+* Generates a C or C++ header file with bitmap arrays.
+* Visualizes the font in the GUI, a PNG image can also be exported.
+
+Example output :
 
 ```c
 // Example Font
@@ -85,15 +91,24 @@ static const std::array<uint8_t, 20> FontBinaryExample =
 };
 ```
 
+Exported PNG image of font data visualization:
+
+![ img font ](https://github.com/gavinlyonsrepo/Colossus_LTSM/blob/main/extras/images/HomeSpun.png)
+
 ## Configuration file
 
 The configuration file is created on startup and populated by default values.
 The file is located at '~/.config/colossus_ltsm/colossus_ltsm.cfg' on Linux systems.
 
-| Setting  | Value |  Default | Note |
+| Setting | Value | Default | Note |
 | ------ | ------ | ----- | ----- |
-| scale | int | 8 | Scale of font displayed  |
-| Columns | int |16 | Number of columns of font characters to display|
+| scale | int | 4 | Scale of font displayed |
+| Columns | int | 16 | Number of columns of font characters to display |
+| debug | bool | False | Enable debug logging |
+
+## Desktop Entry
+
+A button on the main GUI allows Linux users to install a desktop entry and icon for Colossus.This creates a `.desktop` file in `~/.local/share/applications/` and an icon in `~/.local/share/icons/`, allowing Colossus to be launched from the application menu. The button is automatically disabled if the desktop entry is already installed. Uses *Curl* to download the icon from GitHub and creates the desktop entry file with the correct paths.
 
 ## Screenshots
 
@@ -103,7 +118,7 @@ The file is located at '~/.config/colossus_ltsm/colossus_ltsm.cfg' on Linux syst
 
 Some of my libraries that use these fonts are:
 
-| MCU type |Library link | Data adddressing mode|
+| MCU type | Library link | Data adddressing mode |
 | ------ | ------ | ----- |
 | Arduino | [GFX](https://github.com/gavinlyonsrepo/display16_LTSM) | Horizontal |
 | Raspberry Pi Pico | [GFX 16 bit](https://github.com/gavinlyonsrepo/displaylib_16bit_PICO) | Horizontal |
