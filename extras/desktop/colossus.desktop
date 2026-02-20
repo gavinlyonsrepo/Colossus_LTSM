@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Colossus
+GenericName=Colossus
+Comment=Font converter tool
+Exec=colossus
+Icon=colossus
+Categories=Utility;Application;Development;
+Type=Application
+Terminal=false
