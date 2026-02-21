@@ -12,6 +12,7 @@
 * [Output](#output)
 * [Configuration file](#configuration-file)
 * [Desktop Entry](#desktop-entry)
+* [Glyph rendering](#glyph-rendering)
 * [Screenshots](#screenshots)
 * [Projects](#projects)
 
@@ -93,7 +94,7 @@ static const std::array<uint8_t, 20> FontBinaryExample =
 
 Exported PNG image of font data visualization:
 
-![ img font ](https://github.com/gavinlyonsrepo/Colossus_LTSM/blob/main/extras/images/HomeSpun.png)
+![ img font ](https://github.com/gavinlyonsrepo/Colossus_LTSM/blob/main/extras/images/HomeSpun3232.png)
 
 ## Configuration file
 
@@ -104,11 +105,16 @@ The file is located at '~/.config/colossus_ltsm/colossus_ltsm.cfg' on Linux syst
 | ------ | ------ | ----- | ----- |
 | scale | int | 4 | Scale of font displayed |
 | Columns | int | 16 | Number of columns of font characters to display |
-| debug | bool | False | Enable debug logging |
+| debug | bool | False | Enable debug output to terminal |
 
 ## Desktop Entry
 
 A button on the main GUI allows Linux users to install a desktop entry and icon for Colossus.This creates a `.desktop` file in `~/.local/share/applications/` and an icon in `~/.local/share/icons/`, allowing Colossus to be launched from the application menu. The button is automatically disabled if the desktop entry is already installed. Uses *Curl* to download the icon from GitHub and creates the desktop entry file with the correct paths.
+
+## Glyph rendering
+
+Glyph rendering help [readme.](extras/docs/README_glyph_help.md)
+Explains how the converter measures and positions glyphs within the bitmap cell, and how to interpret messages in the conversion log related to width scaling and clipping.
 
 ## Screenshots
 

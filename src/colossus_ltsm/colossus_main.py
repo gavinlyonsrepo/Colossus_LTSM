@@ -33,7 +33,7 @@ class ColossusApp(tk.Tk):
                 except Exception as e:
                     print("Warning: could not set window icon:", e)
         self.title("Colossus")
-        self.geometry("800x600")
+        self.geometry("800x700")
 
         # Container frame to hold pages
         self.container = tk.Frame(self)
