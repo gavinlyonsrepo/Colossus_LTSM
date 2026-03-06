@@ -15,6 +15,7 @@
 * [Glyph rendering](#glyph-rendering)
 * [Screenshots](#screenshots)
 * [Projects](#projects)
+* [See also](#see-also)
 
 ## Overview
 
@@ -105,7 +106,12 @@ The file is located at '~/.config/colossus_ltsm/colossus_ltsm.cfg' on Linux syst
 | ------ | ------ | ----- | ----- |
 | scale | int | 4 | Scale of font displayed |
 | Columns | int | 16 | Number of columns of font characters to display |
+| glyph color | hex color | #0078FF | Color of font glyphs in visualization |
+| background color | hex color | #000000 | Background color for visualization |
+| screen_resolution | str | 1000x800 | Window size for GUI on start up |
 | debug | bool | False | Enable debug output to terminal |
+| input_path | str | $HOME | input file path when a file dialog opens |
+| output_path | str | $HOME | output file path when a file dialog opens |
 
 ## Desktop Entry
 
@@ -131,3 +137,9 @@ Some of my libraries that use these fonts are:
 | Raspberry Pi Pico | [GFX 1 bit](https://github.com/gavinlyonsrepo/displaylib_1bit_PICO) | Vertical |
 | Raspberry Pi | [GFX](https://github.com/gavinlyonsrepo/Display_Lib_RPI) | Horizontal |
 | PIC | [OLED](https://github.com/gavinlyonsrepo/pic_18F47K42_projects ) | Vertical |
+
+## See also
+
+Guardian_LTSM is a Python tool for converting image files into C/C++ data arrays and for visualizing image data stored in C/C++ header files. It is aimed at users working with embedded systems, LCDs, and GUIs where compact images are needed.
+
+[Guardian_LTSM](https://github.com/gavinlyonsrepo/Guardian_LTSM)

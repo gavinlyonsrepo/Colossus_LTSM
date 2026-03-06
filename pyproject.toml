@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "colossus-ltsm"
-version = "1.0.1"
-keywords = ["fonts", "bitmap", "converter", "embedded", "lcd", "gui"]
+version = "1.0.2"
+keywords = ["fonts", "converter", "embedded", "lcd", "gui"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
 ]
-description = "Font, bitmap conversion and visualization tool for embedded systems"
+description = "Font conversion and visualization tool for embedded systems"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
   { name = "Gavin Lyons", email = "glyons66@hotmail.com" }

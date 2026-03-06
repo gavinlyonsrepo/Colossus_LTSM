@@ -1,6 +1,8 @@
 """
 Module for converting TTF fonts to C/C++ bitmap arrays."""
 
+import os
+from dataclasses import dataclass
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -8,11 +10,24 @@ from PIL import Image, ImageFont, ImageDraw
 from colossus_ltsm.settings import settings
 
 
+@dataclass
+class GlyphRenderCtx:
+    """Lightweight bundle passed to glyph-render helpers."""
+    draw: object
+    char: str
+    code: int
+    glyph_w: int
+    canvas_w: int
+    canvas_h: int
+    params: dict
+    char_list: list
+    debug: bool
+
+
 class FontConverter(tk.Frame):
     """ Page for converting TTF fonts to C/C++ bitmap arrays.
     """
-
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller): # pylint: 
         super().__init__(parent)
         self.controller = controller
         label = tk.Label(self, text="Font Converter", font=("Arial", 24))
@@ -89,7 +104,7 @@ class FontConverter(tk.Frame):
         tk.Button(btn_frame, text="Convert", command=self.convert).pack(
             side="left", padx=10)
 
-        # Conversion log panel 
+        # Conversion log panel
         log_frame = tk.Frame(self)
         log_frame.pack(pady=5, padx=10, fill="x", expand=False)
         tk.Label(log_frame, text="Conversion Log:", anchor="w").pack(fill="x")
@@ -132,11 +147,18 @@ class FontConverter(tk.Frame):
 
     def select_file(self):
         """ Open a file dialog to select a TTF file."""
-        path = filedialog.askopenfilename(
+        input_dir = settings.getstr("Paths", "input_dir", fallback=str(os.path.expanduser("~")))
+        if not input_dir or not os.path.isdir(input_dir):
+            input_dir = str(os.path.expanduser("~"))
+        file_path = filedialog.askopenfilename(
+            title="Select TTF Font File",
+            initialdir=input_dir,
             filetypes=[("TrueType Font", "*.ttf"), ("All Files", "*.*")]
         )
-        if path:
-            self.ttf_path.set(path)
+        if file_path:
+            self.ttf_path.set(file_path)
+        else:
+            print("[cview] No file selected, open cancelled.")
 
     def convert(self):
         """Convert the selected TTF font to a C/C++ bitmap array."""
@@ -147,21 +169,24 @@ class FontConverter(tk.Frame):
             self._log_clear()
             params = self._get_params()
             if not params:
+                print("[cview] Invalid parameters, conversion cancelled.")
                 return
             save_path = self._ask_save_path(
                 params['output_name'], params['ext'])
             if not save_path:
+                print("[cview] No save location selected, conversion cancelled.")
                 return
             if not self._validate_dimensions(params):
+                print("[cview] Invalid dimensions for addressing mode, conversion cancelled.")
                 return
             font = ImageFont.truetype(self.ttf_path.get(), params['height'])
-            fontName, fontStyle = font.getname()
+            font_name, font_style = font.getname()
             ascent, descent = font.getmetrics()
-            self._log(f"Font: {fontName} {fontStyle} | "
+            self._log(f"Font: {font_name} {font_style} | "
                       f"Size: {params['width']}x{params['height']} | "
                       f"Ascent: {ascent}px  Descent: {descent}px")
             if settings.getbool("Debug", "debugOnOff", False):
-                print(f"Font selected: {fontName} , {fontStyle}")
+                print(f"Font selected: {font_name} , {font_style}")
                 print(f"Font metrics: ascent={ascent}px, descent={descent}px")
 
             control = [params['width'], params['height'], params['start'],
@@ -173,7 +198,7 @@ class FontConverter(tk.Frame):
             messagebox.showinfo("Success", f"Font converted:\n{save_path}")
             print(f"Font conversion successful. Output saved to: {save_path}")
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=broad-exception-caught
             self._log(f"Conversion failed: {e}", "error")
             messagebox.showerror("Error", f"Conversion failed:\n{e}")
 
@@ -200,13 +225,19 @@ class FontConverter(tk.Frame):
                 'array_style': array_style,
                 'addr_mode': addr_mode
             }
-        except Exception:
+        except (tk.TclError, ValueError):
             messagebox.showerror("Error", "Invalid parameters.")
             return None
 
+
     def _ask_save_path(self, output_name, ext):
         """Ask user where to save output file."""
+        output_dir = settings.getstr("Paths", "output_dir", fallback=str(os.path.expanduser("~")))
+        if not output_dir or not os.path.isdir(output_dir):
+            output_dir = str(os.path.expanduser("~"))
         return filedialog.asksaveasfilename(
+            title="Save Font Array",
+            initialdir=output_dir,
             defaultextension=f".{ext}",
             initialfile=f"{output_name}.{ext}",
             filetypes=[("Header files", f"*.{ext}")]
@@ -229,22 +260,7 @@ class FontConverter(tk.Frame):
         in the ASCII range and fitting the baseline so nothing is clipped at
         either the top or the bottom of the canvas.
         """
-        # Scan all glyphs for the extreme ink extents relative to the baseline
-        max_above = 0   # largest upward extent  (abs value of min bbox[1])
-        max_below = 0   # largest downward extent (max bbox[3])
-
-        for code in range(ascii_start, ascii_end + 1):
-            try:
-                bbox = font.getbbox(chr(code), anchor="ls")
-                if bbox is None:
-                    continue
-                if -bbox[1] > max_above:
-                    max_above = -bbox[1]   # bbox[1] is negative above baseline
-                if bbox[3] > max_below:
-                    max_below = bbox[3]
-            except Exception:
-                continue
-
+        max_above, max_below = self._scan_ink_extents(font, ascii_start, ascii_end)
         total_ink_h = max_above + max_below
 
         if total_ink_h == 0:
@@ -254,13 +270,9 @@ class FontConverter(tk.Frame):
             return round(ascent * canvas_h / font_cell_h) if font_cell_h > 0 else canvas_h - 1
 
         if total_ink_h <= canvas_h:
-            # Everything fits — place baseline so ink is vertically centred in cell
-            # with any spare pixels distributed evenly top and bottom
             spare = canvas_h - total_ink_h
-            top_margin = spare // 2
-            baseline_y = top_margin + max_above
+            baseline_y = spare // 2 + max_above
         else:
-            # Ink taller than canvas (font too large for cell) — centre and accept clipping
             baseline_y = max_above - (total_ink_h - canvas_h) // 2
             self._log(
                 f"Warning: font ink height ({total_ink_h}px) exceeds canvas "
@@ -275,6 +287,23 @@ class FontConverter(tk.Frame):
                   f"baseline_y={baseline_y}")
 
         return baseline_y
+
+    def _scan_ink_extents(self, font, ascii_start, ascii_end):
+        """Return (max_above, max_below) ink extents across the ASCII range."""
+        max_above = 0
+        max_below = 0
+        for code in range(ascii_start, ascii_end + 1):
+            try:
+                bbox = font.getbbox(chr(code), anchor="ls")
+                if bbox is None:
+                    continue
+                if -bbox[1] > max_above:
+                    max_above = -bbox[1]
+                if bbox[3] > max_below:
+                    max_below = bbox[3]
+            except (ValueError, OSError):
+                continue
+        return max_above, max_below
 
     def _generate_glyph_blocks(self, font, params):
         """Generate glyph blocks with baseline anchoring, with horizontal fit protection."""
@@ -295,48 +324,57 @@ class FontConverter(tk.Frame):
             try:
                 bbox = font.getbbox(char, anchor="ls")
                 if bbox is None:
-                    # No ink (e.g. space, control char) — leave blank
                     glyph_blocks.append((char, self._extract_glyph_bytes(img, params)))
                     continue
-
-                glyph_w = bbox[2] - bbox[0]  # actual rendered pixel width
-                x_offset = 0
-
+                glyph_w = bbox[2] - bbox[0]
+                ctx = GlyphRenderCtx(draw, char, code, glyph_w,
+                                     canvas_w, canvas_h, params,
+                                     scaled_chars if glyph_w > canvas_w else centred_chars,
+                                     debug)
                 if glyph_w > canvas_w:
-                    # Glyph wider than cell — scale font down for this character only
-                    scale = canvas_w / glyph_w
-                    scaled_size = max(1, int(params['height'] * scale))
-                    scaled_font = ImageFont.truetype(self.ttf_path.get(), scaled_size)
-                    # Recalculate baseline for the scaled font (descender proportions may differ)
-                    scaled_baseline_y = self._calculate_baseline(
-                        scaled_font, canvas_h, params['start'], params['end']
-                    )
-                    draw.text((0, scaled_baseline_y), char, fill=1,
-                              font=scaled_font, anchor="ls")
-                    scaled_chars.append(f"'{char}'(0x{code:02X})")
-                    if debug:
-                        print(f"  Scaled '{char}' (0x{code:02X}): "
-                              f"glyph_w={glyph_w} > canvas_w={canvas_w}, "
-                              f"new font size={scaled_size}")
+                    self._render_scaled_glyph(ctx)
                 else:
-                    # Glyph fits — centre horizontally in the cell
-                    x_offset = (canvas_w - glyph_w) // 2
-                    if x_offset > 0:
-                        centred_chars.append(f"'{char}'(0x{code:02X})")
-                    draw.text((x_offset, baseline_y), char, fill=1,
-                              font=font, anchor="ls")
-                    if debug and glyph_w > canvas_w * 0.9:
-                        print(f"  Char '{char}' (0x{code:02X}): "
-                              f"glyph_w={glyph_w}, canvas_w={canvas_w} (tight fit)")
-
-            except Exception as e:
+                    self._render_centered_glyph(ctx, font, baseline_y)
+            except (OSError, ValueError) as err:
                 if debug:
-                    print(f"  Char '{char}' fallback render: {e}")
+                    print(f"  Char '{char}' fallback render: {err}")
                 draw.text((0, 0), char, fill=1, font=font)
 
             glyph_blocks.append((char, self._extract_glyph_bytes(img, params)))
 
-        # Report scaling events — always shown regardless of debug setting
+        self._report_glyph_stats(canvas_w, scaled_chars, centred_chars, debug)
+        return glyph_blocks
+
+    def _render_scaled_glyph(self, ctx: GlyphRenderCtx):
+        """Render a glyph that is wider than the cell by scaling the font down."""
+        scale = ctx.canvas_w / ctx.glyph_w
+        scaled_size = max(1, int(ctx.params['height'] * scale))
+        scaled_font = ImageFont.truetype(self.ttf_path.get(), scaled_size)
+        baseline = self._calculate_baseline(
+            scaled_font, ctx.canvas_h, ctx.params['start'], ctx.params['end']
+        )
+        ctx.draw.text((0, baseline), ctx.char, fill=1, font=scaled_font, anchor="ls")
+        ctx.char_list.append(f"'{ctx.char}'(0x{ctx.code:02X})")
+        if ctx.debug:
+            print(
+                f"Scaled '{ctx.char}' (0x{ctx.code:02X}) "
+                f"glyph_w={ctx.glyph_w} > canvas_w={ctx.canvas_w}, "
+                f"new size={scaled_size}"
+            )
+
+    def _render_centered_glyph(self, ctx: GlyphRenderCtx, font, baseline_y):
+        """Render a glyph centred horizontally within the cell."""
+        x_offset = (ctx.canvas_w - ctx.glyph_w) // 2
+        if x_offset > 0:
+            ctx.char_list.append(f"'{ctx.char}'(0x{ctx.code:02X})")
+        ctx.draw.text((x_offset, baseline_y), ctx.char, fill=1, font=font, anchor="ls")
+        if ctx.debug and ctx.glyph_w > ctx.canvas_w * 0.9:
+            print(
+                f"Char '{ctx.char}' (0x{ctx.code:02X}) "
+                f"glyph_w={ctx.glyph_w}, canvas_w={ctx.canvas_w} (tight fit)"
+            )
+
+    def _report_glyph_stats(self, canvas_w, scaled_chars, centred_chars, debug):
         if scaled_chars:
             self._log(
                 f"Width-scaled {len(scaled_chars)} glyph(s) to fit {canvas_w}px cell: "
@@ -344,46 +382,59 @@ class FontConverter(tk.Frame):
                 "warning"
             )
             self._log(
-                "  Tip: increase Pixel Width or reduce font size to avoid scaling.",
+                "Tip: increase Pixel Width or reduce font size to avoid scaling.",
                 "warning"
             )
         else:
-            self._log("All glyphs fit within the cell width — no scaling needed.", "info")
-
-        if debug and centred_chars:
             self._log(
-                f"Horizontally centred {len(centred_chars)} glyph(s): "
-                f"{', '.join(centred_chars[:10])}"
-                + (" ..." if len(centred_chars) > 10 else ""),
+                "All glyphs fit within the cell width — no scaling needed.",
+                "info"
+            )
+        if debug and centred_chars:
+            preview = ", ".join(centred_chars[:10])
+            if len(centred_chars) > 10:
+                preview += " ..."
+
+            self._log(
+                f"Horizontally centred {len(centred_chars)} glyph(s): {preview}",
                 "info"
             )
 
-        return glyph_blocks
-
     def _extract_glyph_bytes(self, img, params):
         """Extract glyph bytes from image according to addressing mode."""
-        width, height, addr_mode = params['width'], params['height'], params['addr_mode']
-        glyph_bytes = []
-        if addr_mode == "vertical":
-            for y_block in range(0, height, 8):
-                for x in range(width):
-                    byte_val = 0
-                    for bit in range(8):
-                        yy = y_block + bit
-                        if yy < height:
-                            pixel = img.getpixel((x, yy))
-                            byte_val |= (1 if pixel else 0) << bit
-                    glyph_bytes.append(byte_val)
-        else:
-            for y in range(height):
-                for x_block in range(0, width, 8):
-                    byte_val = 0
-                    for bit in range(8):
-                        xx = x_block + bit
-                        pixel = img.getpixel((xx, y)) if xx < width else 0
-                        byte_val = (byte_val << 1) | (1 if pixel else 0)
-                    glyph_bytes.append(byte_val)
+        width  = params['width']
+        height = params['height']
+        if params['addr_mode'] == "vertical":
+            return self._pack_vertical(img, width, height)
+        return self._pack_horizontal(img, width, height)
 
+    @staticmethod
+    def _pack_vertical(img, width, height):
+        """Pack pixels column-major, 8 rows per byte (vertical addressing)."""
+        glyph_bytes = []
+        for y_block in range(0, height, 8):
+            for x in range(width):
+                byte_val = 0
+                for bit in range(8):
+                    yy = y_block + bit
+                    if yy < height:
+                        pixel = img.getpixel((x, yy))
+                        byte_val |= (1 if pixel else 0) << bit
+                glyph_bytes.append(byte_val)
+        return glyph_bytes
+
+    @staticmethod
+    def _pack_horizontal(img, width, height):
+        """Pack pixels row-major, 8 columns per byte (horizontal addressing)."""
+        glyph_bytes = []
+        for y in range(height):
+            for x_block in range(0, width, 8):
+                byte_val = 0
+                for bit in range(8):
+                    xx = x_block + bit
+                    pixel = img.getpixel((xx, y)) if xx < width else 0
+                    byte_val = (byte_val << 1) | (1 if pixel else 0)
+                glyph_bytes.append(byte_val)
         return glyph_bytes
 
     def _compose_output(self, control, glyph_blocks, params):
@@ -402,7 +453,7 @@ class FontConverter(tk.Frame):
             f"// Auto-generated monospaced bitmap font (C++/C array)\n"
             f"// Format: [width, height, ASCII offset, last char- ASCII offset]\n"
             f"// Data layout: {params['addr_mode']}-addressed byte rows per glyph\n"
-            f"// Generated by Colossus\n"
+            f"// Generated by Colossus_LTSM\n"
             f"// Generated font: {params['font_name']}\n"
             f"// Size: {params['width']}x{params['height']}\n"
             f"// ASCII range: 0x{params['start']:02X} → 0x{params['end']:02X}\n"
@@ -424,6 +475,6 @@ class FontConverter(tk.Frame):
 
 
 if __name__ == "__main__":
-    print("This is a module, not a standalone script.")
+    print("[cview] This is a module, not a standalone script.")
 else:
-    print("Font Convert module loaded.")
+    print("[cview] Font Convert module loaded.")

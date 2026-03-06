@@ -3,13 +3,13 @@
     Contains the main application class and page management.
 """
 
-import os
 import sys
 from pathlib import Path
 import subprocess
 import tkinter as tk
-from tkinter import scrolledtext, messagebox
+from tkinter import scrolledtext, messagebox, TclError
 import webbrowser
+
 from colossus_ltsm.settings import settings, CL_CONFIG_PATH
 from colossus_ltsm.font_viewer import FontViewer
 from colossus_ltsm.font_converter import FontConverter
@@ -29,11 +29,16 @@ class ColossusApp(tk.Tk):
                 try:
                     icon_img = tk.PhotoImage(file=str(icon_path))
                     self.iconphoto(True, icon_img)
-                    self._icon_ref = icon_img  # prevent garbage collection
-                except Exception as e:
-                    print("Warning: could not set window icon:", e)
+                    self._icon_ref = icon_img  # prevent GC
+                except TclError as e:
+                    print("[Main] Warning: could not set window icon "
+                    "(invalid or unsupported image):", e)
+                except OSError as e:   # covers FileNotFound + permission issues
+                    print("[Main] Warning: could not read icon file:", e)
         self.title("Colossus")
-        self.geometry("800x700")
+        screen_resolution = settings.getstr("Display",
+                                            "screen_resolution", fallback=str("1000x800"))
+        self.geometry(screen_resolution)
 
         # Container frame to hold pages
         self.container = tk.Frame(self)
@@ -257,8 +262,10 @@ class SettingsPage(tk.Frame):
                 data = f.read()
             self.text.delete("1.0", tk.END)
             self.text.insert(tk.END, data)
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not load settings:\n{e}")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "Config file not found.\nUsing empty/default settings.")
+        except (PermissionError, OSError) as e:
+            messagebox.showerror("Error", f"Could not read config file:\n{e}")
 
     def save(self):
         """ Save the current text area content back to the config file."""
@@ -267,7 +274,7 @@ class SettingsPage(tk.Frame):
                 f.write(self.text.get("1.0", tk.END).strip() + "\n")
             messagebox.showinfo("Saved", "Settings saved successfully.")
             settings.load()  # Reload settings to update in memory
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, IsADirectoryError, OSError) as e:
             messagebox.showerror("Error", f"Could not save settings:\n{e}")
 
 
@@ -291,7 +298,7 @@ class AboutPage(tk.Frame):
         text.pack(padx=10, pady=10, fill="both", expand=True)
 
         # Make URL clickable
-        def open_url(event):
+        def open_url(_):
             webbrowser.open("https://github.com/gavinlyonsrepo/Colossus_LTSM")
 
         text.tag_add("link", "4.5", "4.end")  # line 4, chars 5 to end
@@ -320,65 +327,63 @@ def install_desktop_entry():
         app_path = home / ".local/share/applications"
         icon_path.mkdir(parents=True, exist_ok=True)
         app_path.mkdir(parents=True, exist_ok=True)
-
         files = [
             (
                 "colossus.png",
                 icon_path,
-                "https://raw.githubusercontent.com/gavinlyonsrepo/Colossus_LTSM/main/extras/desktop/colossus.png"
+                "https://raw.githubusercontent.com/gavinlyonsrepo/"
+                "Colossus_LTSM/main/extras/desktop/colossus.png"
             ),
             (
                 "colossus.desktop",
                 app_path,
-                "https://raw.githubusercontent.com/gavinlyonsrepo/Colossus_LTSM/main/extras/desktop/colossus.desktop"
+                "https://raw.githubusercontent.com/gavinlyonsrepo/"
+                "Colossus_LTSM/main/extras/desktop/colossus.desktop"
             )
         ]
-
         for filename, target_dir, url in files:
             target_file = target_dir / filename
             if target_file.exists():
-                print(f"INFO:: {filename} already exists in {target_dir}")
+                print(f"[Main] INFO:: {filename} already exists in {target_dir}")
                 continue
             result = subprocess.run(
-                ["curl", "-L", "-s", "-o", str(target_file), url]
+                ["curl", "-L", "-s", "--fail", "-o", str(target_file), url], check=True
             )
             if result.returncode != 0:
                 raise RuntimeError(f"curl failed downloading {filename}")
-            print(f"INFO:: {filename} installed in {target_dir}")
-
+            print(f"[Main] INFO:: {filename} installed in {target_dir}")
         messagebox.showinfo(
             "Desktop Entry Installation",
             "Desktop entry and icon installed (or already present)."
         )
         return True
-
-    except Exception as error:
-        print("Error installing desktop entry:", error)
+    except Exception as error: # pylint: disable=broad-exception-caught
+        print("[Main] Error installing desktop entry:", error)
         messagebox.showerror(
             "Desktop Entry Installation Failed",
             "Installation failed.\nCheck network or curl availability."
         )
         return False
-    
+
 def desktop_entry_installed():
-	"""Return True if desktop entry + icon already exist (Linux only)."""
-	if not sys.platform.startswith("linux"):
-		return False
-	home = Path.home()
-	icon_file = home / ".local/share/icons/colossus.png"
-	desktop_file = home / ".local/share/applications/colossus.desktop"
-	return icon_file.exists() and desktop_file.exists()
+    """Return True if desktop entry + icon already exist (Linux only)."""
+    if not sys.platform.startswith("linux"):
+        return False
+    home = Path.home()
+    icon_file = home / ".local/share/icons/colossus.png"
+    desktop_file = home / ".local/share/applications/colossus.desktop"
+    return icon_file.exists() and desktop_file.exists()
 
 
 def main():
     """ Entry point for the Colossus application."""
-    print(f"Colossus LTSM version {__version__} starting.")
+    print(f"[Main] Colossus LTSM version {__version__} starting.")
     app = ColossusApp()
     app.mainloop()
-    print("Colossus LTSM exited.")
+    print("[Main] Colossus LTSM exited.")
 
 
 if __name__ == "__main__":
     main()
 else:
-    print("Colossus script loaded as module, This is a script")
+    print("[Main] Colossus script loaded as module")
