@@ -31,7 +31,8 @@ It is aimed at users working with embedded systems, LCDs, and GUIs where compact
 ## Installation
 
 1. [github repository](https://www.github.com/gavinlyonsrepo/Colossus_LTSM)
-2. [Pypi package](https://pypi.org/project/colossus-ltsm/)
+2. [Arch Linux AUR package](https://aur.archlinux.org/packages/colossus)
+3. [Pypi package](https://pypi.org/project/colossus-ltsm/)
 
 The program is present in python package index, Pypi.
 Install (you can use *pip* or *pipx*) to the location or environment of your choice.
