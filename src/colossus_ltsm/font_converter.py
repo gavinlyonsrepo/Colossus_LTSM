@@ -11,7 +11,7 @@ from colossus_ltsm.settings import settings
 
 
 @dataclass
-class GlyphRenderCtx:
+class GlyphRenderCtx: # pylint: disable=too-many-instance-attributes
     """Lightweight bundle passed to glyph-render helpers."""
     draw: object
     char: str
@@ -24,22 +24,32 @@ class GlyphRenderCtx:
     debug: bool
 
 
-class FontConverter(tk.Frame):
-    """ Page for converting TTF fonts to C/C++ bitmap arrays.
-    """
-    def __init__(self, parent, controller): # pylint: 
+class FontConverter(tk.Frame):  # pylint: disable=too-many-instance-attributes
+    """Page for converting TTF fonts to C/C++ bitmap arrays."""
+
+    def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+        self._create_title()
+        self._create_file_selection()
+        self._create_options()
+        self._create_buttons()
+        self._create_log_panel()
+
+    def _create_title(self):
         label = tk.Label(self, text="Font Converter", font=("Arial", 24))
         label.pack(pady=20)
-        # File selection
+
+    def _create_file_selection(self):
         self.ttf_path = tk.StringVar()
         tk.Button(self, text="Select TTF File",
                   command=self.select_file).pack(pady=5)
         tk.Entry(self, textvariable=self.ttf_path, width=60).pack(pady=5)
-        # Options
+
+    def _create_options(self):
         options_frame = tk.Frame(self)
         options_frame.pack(pady=10)
+        # Variables
         self.pixel_width = tk.IntVar(value=16)
         self.pixel_height = tk.IntVar(value=16)
         self.ascii_start = tk.IntVar(value=32)
@@ -48,63 +58,69 @@ class FontConverter(tk.Frame):
         self.font_name = tk.StringVar(value="MyFontName")
         self.file_ext = tk.StringVar(value="hpp")
         self.array_style = tk.StringVar(value="cpp")
-        self.addr_mode = tk.StringVar(
-            value="horizontal")  # horizontal / vertical
-        # Row 1
-        tk.Label(options_frame,
-                 text="Pixel Width:").grid(row=0, column=0, sticky="e")
-        tk.Entry(options_frame,
-                 textvariable=self.pixel_width,
+        self.addr_mode = tk.StringVar(value="horizontal")
+
+        # Row 1 - Pixel size
+        tk.Label(options_frame, text="Pixel Width:").grid(
+            row=0, column=0, sticky="e")
+        tk.Entry(options_frame, textvariable=self.pixel_width,
                  width=5).grid(row=0, column=1, padx=5)
-        tk.Label(options_frame, text="Pixel Height:").grid(row=0,
-                                                           column=2, sticky="e")
+
+        tk.Label(options_frame, text="Pixel Height:").grid(
+            row=0, column=2, sticky="e")
         tk.Entry(options_frame, textvariable=self.pixel_height,
                  width=5).grid(row=0, column=3, padx=5)
-        # Row 2
-        tk.Label(options_frame,
-                 text="ASCII Start:").grid(row=1, column=0, sticky="e")
-        tk.Entry(options_frame,
-                 textvariable=self.ascii_start, width=5).grid(row=1,
-                                                              column=1, padx=5)
-        tk.Label(options_frame,
-                 text="ASCII End:").grid(row=1, column=2, sticky="e")
-        tk.Entry(options_frame,
-                 textvariable=self.ascii_end, width=5).grid(row=1,
-                                                            column=3, padx=5)
-        # Row 3
-        tk.Label(options_frame,
-                 text="Font Name:").grid(row=2,
-                                         column=0, sticky="e")
-        tk.Entry(options_frame,
-                 textvariable=self.font_name,
+
+        # Row 2 - ASCII range
+        tk.Label(options_frame, text="ASCII Start:").grid(
+            row=1, column=0, sticky="e")
+        tk.Entry(options_frame, textvariable=self.ascii_start,
+                 width=5).grid(row=1, column=1, padx=5)
+
+        tk.Label(options_frame, text="ASCII End:").grid(
+            row=1, column=2, sticky="e")
+        tk.Entry(options_frame, textvariable=self.ascii_end,
+                 width=5).grid(row=1, column=3, padx=5)
+
+        # Row 3 - Names
+        tk.Label(options_frame, text="Font Name:").grid(
+            row=2, column=0, sticky="e")
+        tk.Entry(options_frame, textvariable=self.font_name,
                  width=20).grid(row=2, column=1, padx=5)
+
         tk.Label(options_frame, text="Output File Name:").grid(
             row=2, column=2, sticky="e")
         tk.Entry(options_frame, textvariable=self.output_name,
                  width=20).grid(row=2, column=3, padx=5)
-        # Row 4
+
+        # Row 4 - File & Array style
         tk.Label(options_frame, text="File Extension:").grid(
             row=3, column=0, sticky="e")
-        tk.OptionMenu(options_frame, self.file_ext, "h",
-                      "hpp").grid(row=3, column=1, padx=5)
+        tk.OptionMenu(options_frame, self.file_ext, "h", "hpp").grid(
+            row=3, column=1, padx=5)
+
         tk.Label(options_frame, text="Array Style:").grid(
             row=3, column=2, sticky="e")
-        tk.OptionMenu(options_frame, self.array_style, "c",
-                      "cpp").grid(row=3, column=3, padx=5)
-        # Row 5 (addressing mode)
+        tk.OptionMenu(options_frame, self.array_style, "c", "cpp").grid(
+            row=3, column=3, padx=5)
+
+        # Row 5 - Addressing mode
         tk.Label(options_frame, text="Addressing:").grid(
             row=4, column=0, sticky="e")
-        tk.Radiobutton(options_frame, text="Horizontal", variable=self.addr_mode,
+        tk.Radiobutton(options_frame, text="Horizontal",
+                       variable=self.addr_mode,
                        value="horizontal").grid(row=4, column=1, sticky="w")
-        tk.Radiobutton(options_frame, text="Vertical", variable=self.addr_mode,
+        tk.Radiobutton(options_frame, text="Vertical",
+                       variable=self.addr_mode,
                        value="vertical").grid(row=4, column=2, sticky="w")
-        # Buttons
+
+    def _create_buttons(self):
         btn_frame = tk.Frame(self)
         btn_frame.pack(pady=20)
-        tk.Button(btn_frame, text="Convert", command=self.convert).pack(
-            side="left", padx=10)
+        tk.Button(btn_frame, text="Convert",
+                  command=self.convert).pack(side="left", padx=10)
 
-        # Conversion log panel
+    def _create_log_panel(self):
         log_frame = tk.Frame(self)
         log_frame.pack(pady=5, padx=10, fill="x", expand=False)
         tk.Label(log_frame, text="Conversion Log:", anchor="w").pack(fill="x")
@@ -124,7 +140,6 @@ class FontConverter(tk.Frame):
         )
         self.log_text.pack(side="left", fill="x", expand=True)
         scrollbar.config(command=self.log_text.yview)
-
         # Colour tags for log levels
         self.log_text.tag_config("info",    foreground="#d4d4d4")
         self.log_text.tag_config("warning", foreground="#f0a500")
@@ -169,14 +184,22 @@ class FontConverter(tk.Frame):
             self._log_clear()
             params = self._get_params()
             if not params:
+                messagebox.showerror(
+                "Error", "Invalid parameters, conversion cancelled.")
                 print("[cview] Invalid parameters, conversion cancelled.")
                 return
             save_path = self._ask_save_path(
                 params['output_name'], params['ext'])
             if not save_path:
+                messagebox.showerror(
+                "Error", "No save location selected, conversion cancelled.")
                 print("[cview] No save location selected, conversion cancelled.")
                 return
             if not self._validate_dimensions(params):
+                messagebox.showerror(
+                "Error", "Invalid dimensions for addressing mode, conversion cancelled. " \
+                "Pixel width  must be a multiple of 8 for horizontal mode." \
+                "Pixel height must be a multiple of 8 for vertical mode.")
                 print("[cview] Invalid dimensions for addressing mode, conversion cancelled.")
                 return
             font = ImageFont.truetype(self.ttf_path.get(), params['height'])
@@ -211,6 +234,10 @@ class FontConverter(tk.Frame):
             end = self.ascii_end.get()
             font_name = self.font_name.get()
             output_name = self.output_name.get()
+            if not font_name:
+                font_name = "CustomFont"
+            if not output_name:
+                output_name = "font_output"
             ext = self.file_ext.get()
             array_style = self.array_style.get()
             addr_mode = self.addr_mode.get()
@@ -245,13 +272,14 @@ class FontConverter(tk.Frame):
 
     def _validate_dimensions(self, params):
         """Validate width/height multiples for addressing mode."""
-        if params['addr_mode'] == "horizontal" and params['width'] % 8 != 0:
-            messagebox.showerror(
-                "Error", "Pixel width must be a multiple of 8 for horizontal mode.")
+        width = params.get("width", 0)
+        height = params.get("height", 0)
+
+        if width <= 0 or height <= 0:
             return False
-        if params['addr_mode'] == "vertical" and params['height'] % 8 != 0:
-            messagebox.showerror(
-                "Error", "Pixel height must be a multiple of 8 for vertical mode.")
+        if params["addr_mode"] == "horizontal" and width % 8 != 0:
+            return False
+        if params["addr_mode"] == "vertical" and height % 8 != 0:
             return False
         return True
 
@@ -297,15 +325,14 @@ class FontConverter(tk.Frame):
                 bbox = font.getbbox(chr(code), anchor="ls")
                 if bbox is None:
                     continue
-                if -bbox[1] > max_above:
-                    max_above = -bbox[1]
-                if bbox[3] > max_below:
-                    max_below = bbox[3]
+                # bbox format: (left, top, right, bottom)
+                max_above = max(max_above, -bbox[1])   # -top   (distance above baseline)
+                max_below = max(max_below, bbox[3])    # bottom (distance below baseline)
             except (ValueError, OSError):
                 continue
         return max_above, max_below
 
-    def _generate_glyph_blocks(self, font, params):
+    def _generate_glyph_blocks(self, font, params): # pylint: disable=too-many-locals
         """Generate glyph blocks with baseline anchoring, with horizontal fit protection."""
         glyph_blocks = []
         canvas_w = params['width']

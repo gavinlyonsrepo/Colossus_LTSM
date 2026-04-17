@@ -1,8 +1,10 @@
-.pylintrc
 stuff/
+extras/output/
 .venv/
 __pycache__/
-myfonts/
-output/
 dist/
+build/
 src/colossus_ltsm.egg-info/
+.coverage
+.vscode
+.pytest_cache

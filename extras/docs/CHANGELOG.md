@@ -8,3 +8,6 @@
   * Added Desktop Entry and icon installation for Linux
   * Added Debug option, color codes, input and output paths to settings
   * Added glyph scaling and clipping warnings to conversion log
+* Version 1.0.3 April 2026
+  * Added test suite
+  * Added pylint + pytest CI.

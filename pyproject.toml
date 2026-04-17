@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "colossus-ltsm"
-version = "1.0.2"
-keywords = ["fonts", "converter", "embedded", "lcd", "gui"]
+version = "1.0.3"
+keywords = ["ttf", "fonts", "converter", "embedded", "lcd", "gui", "font", "microcontroller"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
